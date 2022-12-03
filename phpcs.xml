@@ -13,7 +13,6 @@
 
     <!-- Paths to check -->
     <file>src</file>
-    <file>modules</file>
 
     <exclude-pattern>*/src/Database/*</exclude-pattern>
     <exclude-pattern>*/modules/*/Database/*</exclude-pattern>

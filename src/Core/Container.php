@@ -6,27 +6,26 @@ namespace Geekmusclay\DI\Core;
 
 use Closure;
 use Exception;
-use ReflectionClass;
+use Geekmusclay\DI\Excpetion\ContainerException;
+use Geekmusclay\DI\Excpetion\NotFoundException;
 use Psr\Container\ContainerInterface;
+use ReflectionClass;
 
 /**
  * Describes the dependency injection container implementation
  */
 class Container implements ContainerInterface
 {
-    /**
-     * @var array $entries Array containing all registered entries
-     */
+    /** @var array<string, mixed> $entries Array containing all registered entries */
     protected array $entries = [];
 
     /**
      * Finds an entry of the container by its identifier and returns it.
      *
-     * @param string $id Identifier of the entry to look for.
-     *
+     * @param string $id         Identifier of the entry to look for.
+     * @param array  $parameters Possible parameters to be passed to the input (optional)
      * @throws NotFoundExceptionInterface  No entry was found for **this** identifier.
      * @throws ContainerExceptionInterface Error while retrieving the entry.
-     *
      * @return mixed Entry.
      */
     public function get(string $id, array $parameters = [])
@@ -47,8 +46,6 @@ class Container implements ContainerInterface
      * It does however mean that `get($id)` will not throw a `NotFoundExceptionInterface`.
      *
      * @param string $id Identifier of the entry to look for.
-     *
-     * @return bool
      */
     public function has(string $id): bool
     {
@@ -56,37 +53,38 @@ class Container implements ContainerInterface
     }
 
     /**
-     * @param      $id
-     * @param null $concrete
+     * Storing an entry manually
+     *
+     * @param string     $id    The identifier of the stored entry
+     * @param mixed|null $entry Entry to store
      */
-    public function set(string $id, $concrete = null): self
+    public function set(string $id, $entry = null): self
     {
-        if (null === $concrete) {
-            $concrete = $id;
+        if (null === $entry) {
+            $entry = $id;
         }
-        $this->entries[$id] = $concrete;
+        $this->entries[$id] = $entry;
 
         return $this;
     }
 
     /**
-     * resolve single
+     * Resolve an entry and his dependencies
      *
-     * @param string $concrete
-     *
+     * @param string $entry The entry to resolve
      * @return mixed|object
      * @throws Exception
      */
-    public function resolve($concrete, array $parameters = [])
+    public function resolve(string $entry, array $parameters = [])
     {
-        if ($concrete instanceof Closure) {
-            return $concrete($this, $parameters);
+        if ($entry instanceof Closure) {
+            return $entry($this, $parameters);
         }
-        $reflector = new ReflectionClass($concrete);
-        
+        $reflector = new ReflectionClass($entry);
+
         // check if class is instantiable
-        if (!$reflector->isInstantiable()) {
-            throw new Exception("Class {$concrete} is not instantiable");
+        if (false === $reflector->isInstantiable()) {
+            throw new ContainerException("Class {$entry} is not instantiable");
         }
 
         // get class constructor
@@ -100,16 +98,19 @@ class Container implements ContainerInterface
         $parameters   = $constructor->getParameters();
         $dependencies = $this->getDependencies($parameters);
 
+        // get the instance and store it
+        $instance = $reflector->newInstanceArgs($dependencies);
+        $this->set($entry, $instance);
+
         // get new instance with dependencies resolved
-        return $reflector->newInstanceArgs($dependencies);
+        return $instance;
     }
 
     /**
-     * get all dependencies resolved
+     * Get all entry dependencies
      *
-     * @param $parameters
-     *
-     * @return array
+     * @param array $parameters The entry needed parameters
+     * @return array Resolved dependencies
      * @throws Exception
      */
     public function getDependencies(array $parameters): array
@@ -120,11 +121,11 @@ class Container implements ContainerInterface
             $dependency = $parameter->getClass();
             if (null === $dependency) {
                 // check if default value for a parameter is available
-                if ($parameter->isDefaultValueAvailable()) {
+                if (true === $parameter->isDefaultValueAvailable()) {
                     // get default value of parameter
                     $dependencies[] = $parameter->getDefaultValue();
                 } else {
-                    throw new Exception("Can not resolve class dependency {$parameter->name}");
+                    throw new NotFoundException("Can not resolve class dependency {$parameter->name}");
                 }
             } else {
                 // get dependency resolved

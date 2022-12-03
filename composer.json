@@ -1,4 +1,5 @@
 {
+    "version": "0.1.0",
     "name": "geekmusclay/di-container",
     "description": "Dependecy Injection Container",
     "type": "library",

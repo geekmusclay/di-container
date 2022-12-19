@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Geekmusclay\DI\Excpetion;
+namespace Geekmusclay\DI\Exception;
 
 use Exception;
 use Psr\Container\NotFoundExceptionInterface;

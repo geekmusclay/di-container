@@ -6,10 +6,12 @@ namespace Geekmusclay\DI\Core;
 
 use Closure;
 use Exception;
-use Geekmusclay\DI\Excpetion\ContainerException;
-use Geekmusclay\DI\Excpetion\NotFoundException;
+use Geekmusclay\DI\Exception\ContainerException;
+use Geekmusclay\DI\Exception\NotFoundException;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
+
+use function count;
 
 /**
  * Describes the dependency injection container implementation
@@ -33,6 +35,8 @@ class Container implements ContainerInterface
         // if we don't have it, just register it
         if (false === $this->has($id)) {
             $this->set($id);
+        } else {
+            return $this->entries[$id];
         }
 
         return $this->resolve($this->entries[$id], $parameters);
@@ -58,7 +62,7 @@ class Container implements ContainerInterface
      * @param string     $id    The identifier of the stored entry
      * @param mixed|null $entry Entry to store
      */
-    public function set(string $id, $entry = null): self
+    public function set($id, $entry = null): self
     {
         if (null === $entry) {
             $entry = $id;
@@ -69,14 +73,33 @@ class Container implements ContainerInterface
     }
 
     /**
+     * Bulk action for registering entries.
+     *
+     * @param array<string, array<mixed>> $entries Entries to register
+     */
+    public function bulk(array $entries): self
+    {
+        foreach ($entries as $id => $parameters) {
+            $entry = $this->get($id, $parameters);
+            $this->set($id, $entry);
+        }
+
+        return $this;
+    }
+
+    /**
      * Resolve an entry and his dependencies
      *
-     * @param string $entry The entry to resolve
+     * @param string|object $entry The entry to resolve
      * @return mixed|object
      * @throws Exception
      */
-    public function resolve(string $entry, array $parameters = [])
+    public function resolve($entry, array $parameters = [])
     {
+        if (ContainerInterface::class === $entry) {
+            return $this;
+        }
+
         if ($entry instanceof Closure) {
             return $entry($this, $parameters);
         }
@@ -95,8 +118,12 @@ class Container implements ContainerInterface
         }
 
         // get constructor params
-        $parameters   = $constructor->getParameters();
-        $dependencies = $this->getDependencies($parameters);
+        if (count($parameters) === 0) {
+            $parameters   = $constructor->getParameters();
+            $dependencies = $this->getDependencies($parameters);
+        } else {
+            $dependencies = $parameters;
+        }
 
         // get the instance and store it
         $instance = $reflector->newInstanceArgs($dependencies);
@@ -128,11 +155,26 @@ class Container implements ContainerInterface
                     throw new NotFoundException("Can not resolve class dependency {$parameter->name}");
                 }
             } else {
-                // get dependency resolved
-                $dependencies[] = $this->get($dependency->name);
+                if (self::class !== $dependency->name && ContainerInterface::class !== $dependency->name) {
+                    // get dependency resolved
+                    $dependencies[] = $this->get($dependency->name);
+                } else {
+                    // injects itself
+                    $dependencies[] = $this;
+                }
             }
         }
 
         return $dependencies;
+    }
+
+    /**
+     * Flush container entries.
+     */
+    public function flush(): self
+    {
+        $this->entries = [];
+
+        return $this;
     }
 }

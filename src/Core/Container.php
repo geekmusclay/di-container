@@ -10,6 +10,7 @@ use Geekmusclay\DI\Exception\ContainerException;
 use Geekmusclay\DI\Exception\NotFoundException;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
+use ReflectionMethod;
 
 use function count;
 
@@ -114,7 +115,15 @@ class Container implements ContainerInterface
         $constructor = $reflector->getConstructor();
         if (null === $constructor) {
             // get new instance from class
-            return $reflector->newInstance();
+            $instance = $reflector->newInstance();
+            if (true === method_exists($instance, '__invoke')) {
+                $res = $this->invoke($instance);
+                if (null !== $res) {
+                    $instance = $res;
+                }
+            }
+
+            return $instance;
         }
 
         // get constructor params
@@ -176,5 +185,22 @@ class Container implements ContainerInterface
         $this->entries = [];
 
         return $this;
+    }
+
+    /**
+     * Porcess the invoke function of the given instance.
+     *
+     * @param object $instance The invokable instance
+     */
+    private function invoke(object $instance): ?object
+    {
+        $method = new ReflectionMethod($instance, '__invoke');
+        $parameters = $method->getParameters();
+        if (count($parameters) === 0) {
+            return $instance();
+        }
+        $dependencies = $this->getDependencies($parameters);
+
+        return $instance(...$dependencies);
     }
 }

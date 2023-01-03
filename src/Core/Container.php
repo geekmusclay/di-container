@@ -81,8 +81,7 @@ class Container implements ContainerInterface
     public function bulk(array $entries): self
     {
         foreach ($entries as $id => $parameters) {
-            $entry = $this->get($id, $parameters);
-            $this->set($id, $entry);
+            $this->get($id, $parameters);
         }
 
         return $this;
